@@ -1,0 +1,299 @@
+---
+title: "PKpara and Effect estimation"
+author: "Patil Sopan Raman"
+date: "2022-11-07"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+# Introduction
+Here the data corresponds to calculation of pharmacokinetic for dataset
+we read the dataset
+
+# Data
+
+```{r}
+rm(list = ls(all=TRUE))
+data=read.csv("D:/SOPAN/DATASET/pkparadata.csv",header = F)
+```
+
+# Seperating time point and concetration corresponding to each subject
+
+```{r}
+ti=data[1,5:20]
+ci=data[2:49,5:20]
+```
+# Define function pkpara finding pharmacokinetics 
+
+ 
+- $c_{max}$: maximum concentration
+- $t_{max}$: time point at which concentration is maximum
+- $AUC_{0-t}$: partial area under curve truncated at the population median of t max 
+- ke rate constant
+- $t_{1}/{2}$: elimination half time 
+- $AUC_{0-\infty}$: Area under curve zero to infinity
+
+
+
+```{r}
+pkpara=function(ti,ci){
+  pkpara=data.frame("tmax"=0,"cmax"=0,"auct"=0,"aucinf"=0,"thalf"=0,"ke"=0)
+  n=length(ti)
+  pkpara$cmax=max(ci)     
+  a=which.max(ci)
+  pkpara$tmax=ti[a]      
+  pkpara$auct=sum((ci[2:n]+ci[1:(n-1)])*(ti[2:n]-ti[1:(n-1)]))
+  pkpara$ke=-2.303*coefficients(lm(log10(ci[(a+1):n])~ti[(a+1):n]))[2] 
+  pkpara$thalf=0.693/pkpara$ke   
+  pkpara$aucinf=pkpara$auct+ci[n]/pkpara$ke
+  return(pkpara)
+}
+```
+
+# pharmacokinetic for whole data set
+
+```{r}
+out=pkpara(as.numeric(unlist(ti)),as.numeric(unlist(ci[1,])))
+for(i in 2:48){
+  out[i,]=pkpara(as.numeric(unlist(ti)),as.numeric(unlist(ci[i,])))
+}
+out
+```
+# Five point summary of pharmacokinetic parameter
+
+```{r}
+summary(out)
+```
+# Data of standard 2x2 crossover design
+
+```{r}
+
+data_1=read.csv("D:/SOPAN/DATASET/BABEData2.csv")
+
+```
+# Statistical inferences for the fixed effects
+
+- here we calculate carryover, drug formulation effect, period effect
+- $C_{hat}$: carryover effect (estimated)
+- $F_{hat}$: linear contrast of the seq by period means
+- $P_{hat}$: unbiased estimator of period effect
+
+```{r}
+y11=data_1[data_1$Per==1&data_1$Seq==1,1];n1=length(y11)
+y12=data_1[data_1$Per==1&data_1$Seq==2,1]
+y21=data_1[data_1$Per==2&data_1$Seq==1,1]
+y22=data_1[data_1$Per==2&data_1$Seq==2,1];n2=length(y22)
+U1=y11+y21   # subject total w.r.t. sequence 1
+U2=y12+y22    # subject total w.r.t. sequence 2
+D1=(y21-y11)/2   # period differences for each subject within each sequence 1
+D2=(y22-y12)/2   # period differences for each subject within each sequence 2
+O1=D1
+O2=D2
+sd2u=((n1-1)*var(U1)+(n2-1)*var(U2))/(n1+n2-2)  # pooled estimate of U
+sd2d=((n1-1)*var(D1)+(n2-1)*var(D2))/(n1+n2-2)  # pooled estimate of D
+chat=mean(U2)-mean(U1)  
+fhat=mean(D1)-mean(D2) 
+phat=mean(O1)-mean(O2)   
+vchat=sd2u*(1/n1+1/n2)   # pooled sample variance of carryover effect
+vfhat=sd2d*(1/n1+1/n2)   # pooled sample variance of drug formulation effect
+effect=c("carry","drug","perid")
+mvue=c(chat,fhat,phat)
+vhat=c(vchat,vfhat,vfhat)
+test_stat=mvue/sqrt(vhat)
+pv=2*(1-pt(abs(test_stat),n1+n2-2))
+df=data.frame(effect,round(mvue,2),ss=round(vhat,2),f_ratio=round(test_stat,3),pv=round(pv,4))
+df
+```
+# Conclusion
+
+- carryover effect: $H_{01}:{C_T}-{C_R}=0$ vs $H_{11}:C_T-C_R$ not equal to 0 here from p_value we fail to reject $H_{01}$  at 5% level of significance.
+- Drug formulation effect: $H_{02}:{F_T}-{F_R}=0$ vs $H_{12}:F1-F2$ not equal to 0 here from p_value we fail to reject $H_{02}$  at 5% level of significance.
+- Period effect: $H_{03}:{P_1}-{P_2}=0$ vs $H_{13}:{P_1}-{P_2}$ not equal to 0, here from p_value we fail to reject $H_{03}$ at 5% level of significance.
+
+# Data of standard 2x2 crossover design
+
+```{r}
+data_1=read.csv("D:/SOPAN/DATASET/BABEData2.csv")
+
+```
+# Anova for standard 2x2 crossover design
+
+```{r}
+n=length(data_1$Y)
+y11=data_1[data_1$Per==1&data_1$Seq==1,1];n1=length(y11)
+y12=data_1[data_1$Per==1&data_1$Seq==2,1]
+y21=data_1[data_1$Per==2&data_1$Seq==1,1]
+y22=data_1[data_1$Per==2&data_1$Seq==2,1];n2=length(y22)
+ss_total=((n-1)/n)*var(data_1[,1])
+df=data.frame(c(y11,y12),c(y21,y22))
+ss_within=sum(apply(df,1,var))
+n1=length(y11)
+n2=length(y22)
+ss_between=2*sum((apply(df,1,mean)-mean(data_1$Y))^2)
+sstotal=(n-1)*var(data_1$Y)
+chat=(mean(y12)+mean(y22))-(mean(y11)+mean(y21))
+sscarry=2*n1*n2/(n1+n2)*chat^2/4
+ssinter=ss_between-sscarry
+fhat=(((mean(y21)-mean(y11))-(mean(y22)-mean(y12)))/2)^2
+ssdrug=2*n1*n2/(n1+n2)*fhat
+phat=(((mean(y21)-mean(y11))-(mean(y12)-mean(y22)))/2)^2
+ssperiod=2*n1*n2/(n1+n2)*phat
+
+ssintra=ss_within-ssdrug-ssperiod
+source1=c("carry","inter","drug","period","intra","total")
+df=c(1,(n1+n2-2),1,1,(n1+n2-2),2*(n1+n2)-1)
+ss=c(sscarry,ssinter,ssdrug,ssperiod,ssintra,sstotal)
+msq=ss/df
+fcal=rep(0,6)
+fcal[1]=msq[1]/msq[2]
+fcal[2:4]=msq[2:4]/msq[5]
+pv=1-pt(msq,1,n1+n2-2)
+data.frame("source"=source1,"df"=df,"sumofsq"=ss,mss=round(msq,3),"fcal"=round(fcal,4),"p_val"=pv)
+
+```
+# Conclusion
+- carryover effect $H_{01}:{C_T}-{C_R}=0$ vs $H_{01}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is not present.
+- Drug effect $H_{03}:{F_T}-{F_R}=0$ vs $H_{14}:{F_1}-{F_2}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{13}:{P_1}-{P_2}$not equal to 0 here from p_value reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is present. 
+
+# Here we combine dataframe of BABEData2 and six pk parameter dataframe
+
+```{r}
+df=data.frame(data_1,out)
+```
+
+```{r}
+crosanova=function(Y,Seq,Sub,Per){
+  df=data.frame(Y,Seq,Sub,Per)
+  Y=df[,1]
+  n=length(Y)
+  sst=((n-1)/n)*var(Y)
+  y11=df[df$Per==1&df$Seq==1,1];n1=length(y11)
+  y12=df[df$Per==1&df$Seq==2,1]
+  y21=df[df$Per==2&df$Seq==1,1]
+  y22=df[df$Per==2&df$Seq==2,1];n2=length(y22)
+  df1=data.frame(y11,y21)
+  df2=data.frame(y12,y22)
+  v1=apply(df1,1,var)
+  v2=apply(df2,1,var)
+  sswit=sum(v1)+sum(v2)
+  m1=sum((apply(df1,1,mean)-mean(Y))^2)
+  m2=sum((apply(df2,1,mean)-mean(Y))^2)
+  ssbet=2*(m1+m2)
+  u1=y11+y21;u2=y12+y22
+  d1=(y21-y11)/2;d2=(y22-y12)/2
+  o1=d1;o2=d2
+  
+  chat=mean(u2)-mean(u1)
+  fhat=mean(d1)-mean(d2)
+  phat=mean(o1)-mean(o2)
+  sscarry=2*n1*n2/(n1+n2)*chat^2/4
+  ssdrug=2*n1*n2/(n1+n2)*fhat^2
+  ssperiod=2*n1*n2/(n1+n2)*phat^2
+  ssintra=sswit-ssdrug-ssperiod
+  ssinter=ssbet-sscarry
+  
+  source1=c("carry","inter","drug","period","intra","Total") 
+  dof=c(1,n1+n2-2,1,1,n1+n2-2,n-1)
+  ss=c(sscarry,ssinter,ssdrug,ssperiod,ssintra,sst)
+  msq=ss/dof
+  fcal=rep(0,6)
+  fcal[1]=msq[1]/msq[2]
+  fcal[2:4]=msq[2:4]/msq[5]
+  pval=rep(0,6)
+  pval[1]=1-pf(fcal[1],dof[1],dof[2])
+  pval[2:4]=1-pf(fcal[2:4],dof[2:4],dof[5])
+  return(data.frame("s_var"=source1,"DF"=dof,"sof_squ"=round(ss,4),"Fcal"=round(fcal,4),"p_value"=round(pval,4)))
+}
+
+```
+# Anova corresponds to concentration
+```{r}
+crosanova(df$cmax,df$Seq,df$Sub,df$Per)
+```
+# Conclusion
+- carryover effect $H_{01}:{C_T}-{C_R}=0$ vs $H_{11}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is present. 
+- Drug effect $H_{03}:{F_T}-{F_R}=0$ vs $H_{13}:{F_T}-{F_R}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_{04}:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$ not equal to 0 here from p_value fail to reject $H_{04}$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is not present. 
+
+# Anova corresponds to time point
+
+```{r}
+crosanova(df$tmax,df$Seq,df$Sub,df$Per)
+```
+# Conclusion
+- carryover effect $H_{01}:{C_T}-{C_R}=0$ vs $H_{11}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is present. 
+- Drug effect $H_03:{F_T}-{F_R}=0$ vs $H_{13}:{F_T}-{F_R}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$ not equal to 0 here from p_value fail to reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is not present. 
+
+# Anova corresponds to partial auc truncated at the population median of t max
+
+```{r}
+crosanova(df$auct,df$Seq,df$Sub,df$Per)
+```
+# Conclusion
+- carryover effect $H_{01}:{C_T}-{C_R}=0$ vs $H_{11}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is present. 
+- Drug effect $H_03:{F_T}-{F_R}=0$ vs $H_{13}:{F_T}-{F_R}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$ not equal to 0 here from p_value fail to reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is not present. 
+
+# Anova corresponds to rate constant
+
+```{r}
+crosanova(df$ke,df$Seq,df$Sub,df$Per)
+```
+# Conclusion
+
+- carryover effect $H_{01}:{C_T}-{C_R}=0$ vs $H_{11}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is present. 
+- Drug effect $H_03:{F_T}-{F_R}=0$ vs $H_{13}:{F_T}-{F_R}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$ not equal to 0 here from p_value fail to reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is not present. 
+
+# Anova corresponds to area under curve zero to infinity 
+
+```{r}
+crosanova(df$aucinf,df$Seq,df$Sub,df$Per)
+```
+# Conclusion
+- carryover effect $H_{01}:{C_T}-{C_R}=0$ vs H$H_{11}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is present. 
+- Drug effect $H_03:{F_T}-{F_R}=0$ vs $H_{13}:{F_T}-{F_R}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$ not equal to 0 here from p_value fail to reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is not present.
+
+# Anova corresponds to elimination half time 
+
+```{r}
+crosanova(df$thalf,df$Seq,df$Sub,df$Per)
+```
+# Conclusion
+
+- carryover effect $H_01:{C_T}-{C_R}=0$ vs $H_{11}:{C_T}-{C_R}$ not equal to 0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is present.
+- Drug effect $H_03:{F_T}-{F_R}=0$ vs $H_{13}:{F_T}-{F_R}$ not equal to 0 here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$ not equal to 0 here from p_value fail to reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is not present. 
+
+# plot of time point and concetration
+
+```{r}
+time=unlist(ti)
+y1=apply(data[data$V3==1,5:20],2,mean)
+x1=plot(time,y1,type="l",col='blue',xlab = "time",ylab="concentration")
+par(new=TRUE)
+y2=apply(data[data$V3==2,5:20],2,mean)
+x2=plot(time,y2,type="l",col='red',xlab = "time",ylab="concentration")
+title(main = "Area under curve", xlab = "time", ylab = "concentration")
+
+```
+#from graph we have seen that there is Bioavailability and bioequivalence 
