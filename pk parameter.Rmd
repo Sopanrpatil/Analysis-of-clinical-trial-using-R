@@ -1,0 +1,71 @@
+---
+title: "pharmaco parameter"
+author: "Sopan Raman Patil"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Pharmacokinetic parameters
+
+- $c_{max}$: maximum concentration
+- $t_{max}$: time point at which concentration is maximum
+- $AUC_{0-t}$: partial area under curve truncated at the population 
+  median of t max 
+- ke rate constant
+- $t_{1/2}$: elimination half time 
+- $AUC_{0-\infty}$: Area under curve zero to infinity
+
+```{r}
+
+time_point=c(0,0.5,1,1.5,2,3,4,6,8,12,16,24,32)
+conc=c(0,0,2.8,4.4,4.4,4.7,4.1,4,3.6,3,2.5,2,1.6)
+n=length(time_point)
+cmax=max(conc)
+a=which.max(conc)
+tmax=time_point[a]
+auc_t=sum((conc[2:n]+conc[1:(n-1)])*(time_point[2:n]-time_point[1:(n-1)]))
+model=lm(log10(conc[(a+1):n])~time_point[(a+1):n])
+ke=-2.303*coefficients(model)[2]
+t_half=0.693/ke
+auc_inf=auc_t+conc[n]/ke
+plot(time_point,conc,type = 'l',col='black')
+```
+
+
+# Pharmacokinetic parameters for BABE data
+
+```{r}
+rm(list = ls(all=TRUE))
+data=read.csv("D:/SOPAN/DATASET/BABE.csv",header = F)
+head(data)
+```
+
+## Here we seperate time point and concentration from the data
+```{r}
+ti=data[1,5:20]
+ci=data[2:49,5:20]
+pkpara=function(ti,ci){
+  pkpara=data.frame("tmax"=0,"cmax"=0,"auct"=0,"aucinf"=0,"thalf"=0,"ke"=0)
+  n=length(ti)
+  pkpara$cmax=max(ci)     
+  a=which.max(ci)
+  pkpara$tmax=ti[a]      
+  pkpara$auct=sum((ci[2:n]+ci[1:(n-1)])*(ti[2:n]-ti[1:(n-1)]))
+  pkpara$ke=-2.303*coefficients(lm(log10(ci[(a+1):n])~ti[(a+1):n]))[2] 
+  pkpara$thalf=0.693/pkpara$ke   
+  pkpara$aucinf=pkpara$auct+ci[n]/pkpara$ke
+  return(pkpara)
+}
+```
+
+
+```{r}
+out=pkpara(as.numeric(unlist(ti)),as.numeric(unlist(ci[1,])))
+for(i in 2:48){
+  out[i,]=pkpara(as.numeric(unlist(ti)),as.numeric(unlist(ci[i,])))
+}
+head(out)
+```
+```{r}
+summary(out)
+```
