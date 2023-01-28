@@ -1,0 +1,56 @@
+---
+title: "Analysis of variance"
+author: "Sopan Raman Patil"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# standard 2x2 crossover design
+
+```{r}
+data_1=read.csv("D:/SOPAN/DATASET/BABE2.csv")
+head(data_1)
+```
+
+# Analysis of standard crossover design
+
+```{r}
+
+n=length(data_1$Y)
+y11=data_1[data_1$Per==1&data_1$Seq==1,1] # per=1 seq=1
+y12=data_1[data_1$Per==1&data_1$Seq==2,1] # per=1 seq=2
+y21=data_1[data_1$Per==2&data_1$Seq==1,1] # per=2 seq=1
+y22=data_1[data_1$Per==2&data_1$Seq==2,1] # per=2 seq=2
+ss_total=((n-1)/n)*var(data_1[,1])
+df=data.frame(c(y11,y12),c(y21,y22))
+ss_within=sum(apply(df,1,var))
+n1=length(y11)
+n2=length(y22)
+ss_between=2*sum((apply(df,1,mean)-mean(data_1$Y))^2)
+chat=(mean(y12)+mean(y22))-(mean(y11)+mean(y21))
+sscarry=2*n1*n2/(n1+n2)*chat^2/4
+ssinter=ss_between-sscarry
+fhat=(((mean(y21)-mean(y11))-(mean(y22)-mean(y12)))/2)^2
+ssdrug=2*n1*n2/(n1+n2)*fhat
+phat=(((mean(y21)-mean(y11))-(mean(y12)-mean(y22)))/2)^2
+ssperiod=2*n1*n2/(n1+n2)*phat
+
+ssintra=ss_within-ssdrug-ssperiod
+source1=c("carry","inter","drug","period","intra","total")
+df=c(1,(n1+n2-2),1,1,(n1+n2-2),2*(n1+n2)-1)
+ss=c(sscarry,ssinter,ssdrug,ssperiod,ssintra,ss_total)
+msq=ss/df
+fcal=rep(0,6)
+fcal[1]=msq[1]/msq[2]
+fcal[2:4]=msq[2:4]/msq[5]
+pv=1-pt(msq,1,n1+n2-2)
+data.frame("source"=source1,"df"=df,"SS"=round(ss,2),"MSS"=round(msq,2),"fcal"=round(fcal,2),"p_val"=round(pv,4))
+
+```
+
+# Conclusion
+- carryover effect $H_{00}:{C_T}-{C_R}=0$ vs $H_{01}:{C_T}-{C_R}$ not equal to   0 here from p_value we fail to reject $H_01$ at 5% level of significance.
+- from p_value we can conclude that inter subject variability is not present.
+- Drug effect $H_{03}:{F_T}-{F_R}=0$ vs $H_{13}:{F_1}-{F_2}$ not equal to 0      here from p_value we fail to reject $H_03$  at 5% level of significance.
+- period effect $H_04:{P_1}-{P_2}=0$ vs $H_{14}:{P_1}-{P_2}$not equal to 0 here   from p_value reject $H_04$  at 5% level of significance.
+- from p_value we can conclude that intra subject variability is present.
