@@ -1,0 +1,55 @@
+---
+title: "Inference on 2x2 crossover design"
+author: "Sopan Raman Patil"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+# Data of standard 2x2 crossover design
+
+```{r}
+data_1=read.csv("D:/SOPAN/DATASET/BABE2.csv")
+head(data_1)
+```
+
+# Statistical infernce on fixed effect
+- here we calculate carryover, drug formulation effect, period effect
+- $C_{hat}$: carryover effect (estimated)
+- $F_{hat}$: linear contrast of the seq by period means
+- $P_{hat}$: unbiased estimator of period effect
+
+```{r}
+y11=data_1[data_1$Per==1&data_1$Seq==1,1]
+y12=data_1[data_1$Per==1&data_1$Seq==2,1]
+y21=data_1[data_1$Per==2&data_1$Seq==1,1]
+y22=data_1[data_1$Per==2&data_1$Seq==2,1]
+n1=length(y11)
+n2=length(y22)
+U1=y11+y21   # subject total w.r.t. sequence 1
+U2=y12+y22    # subject total w.r.t. sequence 2
+D1=(y21-y11)/2   # period differences for each subject within each sequence 1
+D2=(y22-y12)/2   # period differences for each subject within each sequence 2
+O1=D1
+O2=-D2
+sd2u=((n1-1)*var(U1)+(n2-1)*var(U2))/(n1+n2-2)  # pooled estimate of U
+sd2d=((n1-1)*var(D1)+(n2-1)*var(D2))/(n1+n2-2)  # pooled estimate of D
+chat=mean(U2)-mean(U1)  
+fhat=mean(D1)-mean(D2) 
+phat=mean(O1)-mean(O2)   
+vchat=sd2u*(1/n1+1/n2)   # pooled sample variance of carryover effect
+vfhat=sd2d*(1/n1+1/n2)   # pooled sample variance of drug formulation effect
+vphat=sd2d*(1/n1+1/n2)  # pooled sample variance of period effect
+effect=c("carry","drug","perid")
+mvue=c(chat,fhat,phat)
+vhat=c(vchat,vfhat,vphat)
+test_stat=mvue/sqrt(vhat)
+pv=2*(1-pt(abs(test_stat),n1+n2-2))
+df=data.frame(effect,round(mvue,2),ss=round(vhat,2),f_ratio=round(test_stat,3),pv=round(pv,4))
+df
+```
+
+# Conclusion
+
+- carryover effect: $H_{01}:{C_T}-{C_R}=0$ vs $H_{11}:C_T-C_R$ not equal to 0 here from p_value we fail to reject $H_{01}$  at 5% level of significance.
+- Drug formulation effect: $H_{02}:{F_T}-{F_R}=0$ vs $H_{12}:F1-F2$ not equal to 0 here from p_value we fail to reject $H_{02}$  at 5% level of significance.
+- Period effect: $H_{03}:{P_1}-{P_2}=0$ vs $H_{13}:{P_1}-{P_2}$ not equal to 0, here from p_value we fail to reject $H_{03}$ at 5% level of significance.
