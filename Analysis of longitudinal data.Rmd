@@ -1,0 +1,63 @@
+---
+title: "Analysis of longitudinal data"
+author: "Sopan Raman Patil"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+# Load the data set
+```{r}
+DF=read.csv("D:/SOPAN/OTHER/DATASET/DBPdata.csv")
+summary(DF)
+```
+
+```{r}
+## reshape the data along in long direction
+df=reshape(DF,direction = "long",sep="",
+           varying = c("DBP1","DBP2","DBP3","DBP4","DBP5"),
+           idvar =  c("Subject","TRT","Age","Sex"))
+colnames(df)=c("Subject","TRT","Age","Sex","Time","DBP")
+n=40     # number of subject 
+intercept=slope=numeric(n)
+for(i in 1:n){
+  model=lm(DBP~Time,df[df$Subject==i,])
+  intercept[i]=coef(model)[1]
+  slope[i]=coef(model)[2]
+}
+df_coef=data.frame(Subject=DF$Subject,TRT=DF$TRT,
+                   Intercept = intercept, Slope=slope)
+df_coef
+```
+
+## We note that the intercepts vary about 120 mmHg with a slope of about -2.5 mmHg/month.
+```{r}
+model_coef = lm(Slope~Intercept*TRT, df_coef)
+summary(model_coef)
+```
+## Conclusion: Model 1 - interaction (Intercept: TRTB) is not statistically significant
+
+```{r}
+# Model 2
+model_coef = lm(Slope~Intercept+TRT, df_coef)
+summary(model_coef)
+```
+## conclusion : Model 2 - is a significant difference between the two treatments (TRT B).
+
+```{r}
+# test slope difference
+t.test(Slope~TRT, df_coef,var=T)   # Assuming variance equal
+t.test(Slope~TRT, df_coef,var=F)   # Assuming variance unequal
+```
+
+# Analysis of longitudinal modeling
+```{r}
+library(lmerTest)
+# Fit Model 1
+model1DBP= lmer(DBP~TRT*Time+(Time|Subject),df)
+# Fit Model 2
+model2DBP = lmer(DBP~TRT*Time+(1|Subject),df)
+# model comparison
+anova(model1DBP, model2DBP)
+summary(model2DBP)
+```
+
